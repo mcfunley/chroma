@@ -1,6 +1,8 @@
 import logging
 from typing import Mapping, Optional, cast
 
+import httpx
+
 from chromadb.api.types import Documents, EmbeddingFunction, Embeddings
 
 logger = logging.getLogger(__name__)
@@ -17,6 +19,7 @@ class OpenAIEmbeddingFunction(EmbeddingFunction[Documents]):
         api_version: Optional[str] = None,
         deployment_id: Optional[str] = None,
         default_headers: Optional[Mapping[str, str]] = None,
+        timeout: Optional[float | httpx.Timeout] = None,
     ):
         """
         Initialize the OpenAIEmbeddingFunction.
@@ -84,6 +87,7 @@ class OpenAIEmbeddingFunction(EmbeddingFunction[Documents]):
             self._client = openai.Embedding
         self._model_name = model_name
         self._deployment_id = deployment_id
+        self._timeout = timeout or openai.NOT_GIVEN
 
     def __call__(self, input: Documents) -> Embeddings:
         """
@@ -107,7 +111,9 @@ class OpenAIEmbeddingFunction(EmbeddingFunction[Documents]):
         # Call the OpenAI Embedding API
         if self._v1:
             embeddings = self._client.create(
-                input=input, model=self._deployment_id or self._model_name
+                input=input,
+                model=self._deployment_id or self._model_name,
+                timeout=self._timeout,
             ).data
 
             # Sort resulting embeddings by index
@@ -120,12 +126,16 @@ class OpenAIEmbeddingFunction(EmbeddingFunction[Documents]):
         else:
             if self._api_type == "azure":
                 embeddings = self._client.create(
-                    input=input, engine=self._deployment_id or self._model_name
+                    input=input,
+                    engine=self._deployment_id or self._model_name,
+                    timeout=self._timeout
                 )["data"]
             else:
-                embeddings = self._client.create(input=input, model=self._model_name)[
-                    "data"
-                ]
+                embeddings = self._client.create(
+                    input=input,
+                    model=self._model_name,
+                    timeout=self._timeout
+                    )["data"]
 
             # Sort resulting embeddings by index
             sorted_embeddings = sorted(
